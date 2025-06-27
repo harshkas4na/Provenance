@@ -1,379 +1,731 @@
-# 📊 Event Data Extraction Strategy & Reliability Analysis
+# 📊 Citrea Reputation System
 
-## 🎯 How We Extract Scoring Data from Events
+**The first comprehensive on-chain reputation scoring system for Bitcoin's first Zero-Knowledge Rollup.**
 
-### **The Core Principle: Events Tell the Complete Story**
-
-Every DeFi action creates a blockchain event that contains **all the information** needed for reputation scoring:
-- **WHO** performed the action (user address)
-- **WHAT** they did (event type)  
-- **HOW MUCH** value was involved (amounts, prices)
-- **WHEN** it happened (block timestamp)
-- **WHERE** it happened (contract address, transaction hash)
+Transform user activities across the entire Citrea ecosystem into a unified, gamified reputation score that enables undercollateralized lending, governance weight, and protocol incentives.
 
 ---
 
-## 📋 Protocol-by-Protocol Event Mapping
+## 🎯 **Project Overview**
 
-### **1. Namoshi Name Service (Identity)**
+This repository contains:
+- **ReputationSBT.sol** - Smart contract that handles all scoring logic
+- **Backend Event Relay** - Monitors protocol events and relays to smart contract
+- **Mock Protocol Contracts** - Demo versions of Citrea ecosystem protocols
+- **API Server** - REST endpoints for reputation queries
 
-**Events We Monitor:**
-```solidity
-event DomainRegistered(address indexed owner, string name, uint256 expires);
-event DomainRenewed(address indexed owner, string name, uint256 expires);
+## 🏗️ **System Architecture**
+
+```
+[User Actions] → [Protocol Events] → [Backend Relay] → [Smart Contract] → [Reputation Update]
 ```
 
-**Data Extraction:**
-```typescript
-// Registration Event
+The smart contract contains ALL scoring logic, while the backend simply monitors and relays events. This ensures transparency and prevents gaming.
+
+---
+
+## 📋 **Prerequisites**
+
+Before starting, ensure you have:
+
+- **Foundry** installed ([Installation Guide](https://book.getfoundry.sh/getting-started/installation))
+- **Node.js** v18+ and npm
+- **Git** for cloning
+- **Citrea Testnet** setup with test ETH
+
+### Install Foundry
+```bash
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
+```
+
+### Verify Installation
+```bash
+forge --version
+cast --version
+anvil --version
+```
+
+---
+
+## 🚀 **Step-by-Step Setup**
+
+### Step 1: Clone and Initialize Project
+
+```bash
+# Clone the repository
+git clone <your-repo-url>
+cd citrea-reputation-system
+
+# Initialize foundry project
+forge init --force
+
+# Install dependencies
+forge install OpenZeppelin/openzeppelin-contracts
+```
+
+### Step 2: Project Structure Setup
+
+```bash
+# Create the proper directory structure
+mkdir -p src script test backend/src
+
+# Move contracts to src/
+# (Assuming you have the contracts ready)
+```
+
+Your structure should look like:
+```
+citrea-reputation-system/
+├── src/
+│   ├── ReputationSBT.sol
+│   └── MockProtocols.sol
+├── script/
+│   └── Deploy.s.sol
+├── test/
+├── backend/
+│   ├── src/
+│   ├── package.json
+│   └── .env
+└── foundry.toml
+```
+
+### Step 3: Configure Foundry
+
+Create/update `foundry.toml`:
+```bash
+cat > foundry.toml << 'EOF'
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+remappings = ["@openzeppelin/=lib/openzeppelin-contracts/"]
+
+[rpc_endpoints]
+citrea_testnet = "https://rpc.testnet.citrea.xyz"
+
+[etherscan]
+citrea_testnet = { key = "your-api-key", url = "https://explorer.testnet.citrea.xyz" }
+EOF
+```
+
+### Step 4: Setup Backend Environment
+
+```bash
+# Navigate to backend directory
+cd backend
+
+# Initialize Node.js project
+npm init -y
+
+# Install dependencies
+npm install ethers express cors dotenv @types/node @types/express @types/cors typescript ts-node nodemon
+
+# Install dev dependencies
+npm install --save-dev @types/node @types/express @types/cors typescript ts-node nodemon prettier eslint
+
+# Create package.json scripts
+cat > package.json << 'EOF'
 {
-    user: event.args.owner,        // WHO: 0x742d35Cc...
-    value: 1                       // WHAT: Binary action (registered or not)
+  "name": "citrea-reputation-backend",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/eventRelay.js",
+    "dev": "ts-node src/eventRelay.ts",
+    "dev:watch": "nodemon --exec ts-node src/eventRelay.ts"
+  },
+  "dependencies": {
+    "ethers": "^6.14.4",
+    "express": "^5.1.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.3",
+    "@types/express": "^5.0.3",
+    "@types/cors": "^2.8.19",
+    "typescript": "^5.8.3",
+    "ts-node": "^10.9.2",
+    "nodemon": "^3.1.10"
+  }
 }
+EOF
 
-// Renewal Event  
+# Create TypeScript config
+cat > tsconfig.json << 'EOF'
 {
-    user: event.args.owner,        // WHO: 0x742d35Cc...
-    value: 1                       // WHAT: Binary action (renewed or not)
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
 }
+EOF
+
+# Create environment file template
+cat > .env.example << 'EOF'
+# Citrea Network
+CITREA_RPC_URL=https://rpc.testnet.citrea.xyz
+
+# Private key for backend wallet (needs to be authorized as relay)
+PRIVATE_KEY=your_private_key_here
+
+# Deployed contract addresses (fill after deployment)
+REPUTATION_CONTRACT_ADDRESS=
+NAMOSHI_CONTRACT_ADDRESS=
+SATSUMA_CONTRACT_ADDRESS=
+SPINE_CONTRACT_ADDRESS=
+MINT_PARK_CONTRACT_ADDRESS=
+ASIGNA_CONTRACT_ADDRESS=
+DVOTE_CONTRACT_ADDRESS=
+
+# API Configuration
+PORT=3001
+EOF
+
+# Copy to actual .env (you'll update this after deployment)
+cp .env.example .env
 ```
 
-**Scoring Logic:**
-- **Base Points**: 50 for registration, 25 for renewal
-- **Value Scaling**: None (binary actions)
-- **Daily Limit**: 200 points (max 4 domains per day)
-- **Minimum**: Must be valid domain registration
+### Step 5: Create Deployment Script
 
-**Why This Works:**
-✅ Domain registration is a clear commitment to the ecosystem
-✅ Higher points for new registrations vs renewals
-✅ Daily limits prevent domain squatting for points
+```bash
+# Go back to project root
+cd ..
+
+# Create deployment script
+cat > script/Deploy.s.sol << 'EOF'
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+import "forge-std/Script.sol";
+import "../src/ReputationSBT.sol";
+import "../src/MockProtocols.sol";
+
+contract Deploy is Script {
+    function run() external {
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        address deployer = vm.addr(deployerPrivateKey);
+        
+        console.log("Deploying from:", deployer);
+        console.log("Balance:", deployer.balance);
+        
+        vm.startBroadcast(deployerPrivateKey);
+        
+        // 1. Deploy ReputationSBT
+        console.log("\n=== DEPLOYING REPUTATION SYSTEM ===");
+        ReputationSBT reputationSBT = new ReputationSBT();
+        console.log("ReputationSBT deployed at:", address(reputationSBT));
+        
+        // 2. Deploy Mock Protocol Factory
+        console.log("\n=== DEPLOYING MOCK PROTOCOLS ===");
+        MockProtocolFactory factory = new MockProtocolFactory();
+        console.log("MockProtocolFactory deployed at:", address(factory));
+        
+        // 3. Deploy all protocols
+        factory.deployAllProtocols();
+        
+        // 4. Get addresses
+        (
+            address namoshi,
+            address satsuma,
+            address spine,
+            address mintpark,
+            address asigna,
+            address dvote
+        ) = factory.getAllAddresses();
+        
+        console.log("Namoshi deployed at:", namoshi);
+        console.log("Satsuma deployed at:", satsuma);
+        console.log("Spine deployed at:", spine);
+        console.log("MintPark deployed at:", mintpark);
+        console.log("Asigna deployed at:", asigna);
+        console.log("DVote deployed at:", dvote);
+        
+        // 5. Deploy orchestrator
+        DemoOrchestrator orchestrator = new DemoOrchestrator(
+            namoshi, satsuma, spine, mintpark, asigna, dvote
+        );
+        console.log("DemoOrchestrator deployed at:", address(orchestrator));
+        
+        // 6. Authorize deployer as relay
+        reputationSBT.setAuthorizedRelay(deployer, true);
+        console.log("Authorized deployer as relay");
+        
+        vm.stopBroadcast();
+        
+        // 7. Print env vars
+        console.log("\n=== UPDATE YOUR .env FILE ===");
+        console.log("REPUTATION_CONTRACT_ADDRESS=", vm.toString(address(reputationSBT)));
+        console.log("NAMOSHI_CONTRACT_ADDRESS=", vm.toString(namoshi));
+        console.log("SATSUMA_CONTRACT_ADDRESS=", vm.toString(satsuma));
+        console.log("SPINE_CONTRACT_ADDRESS=", vm.toString(spine));
+        console.log("MINT_PARK_CONTRACT_ADDRESS=", vm.toString(mintpark));
+        console.log("ASIGNA_CONTRACT_ADDRESS=", vm.toString(asigna));
+        console.log("DVOTE_CONTRACT_ADDRESS=", vm.toString(dvote));
+    }
+}
+EOF
+```
 
 ---
 
-### **2. DEX Trading (Satsuma/Citrus Swap)**
+## 🔑 **Deployment Process**
 
-**Events We Monitor:**
-```solidity
-event Swap(
-    address indexed sender,
-    uint256 amount0In,
-    uint256 amount1In, 
-    uint256 amount0Out,
-    uint256 amount1Out,
-    address indexed to
-);
+### Step 1: Setup Private Key
 
-event Mint(address indexed sender, uint256 amount0, uint256 amount1);
+```bash
+# Create .env file in project root
+cat > .env << 'EOF'
+PRIVATE_KEY=your_private_key_here
+EOF
+
+# Make sure you have test ETH on Citrea testnet
+# Get from: https://citrea.xyz (faucet section)
 ```
 
-**Data Extraction:**
-```typescript
-// Swap Event
+### Step 2: Compile Contracts
+
+```bash
+# Compile all contracts
+forge build
+
+# Check for any compilation errors
+forge compile --force
+```
+
+### Step 3: Deploy to Citrea Testnet
+
+```bash
+# Deploy all contracts
+forge script script/Deploy.s.sol --rpc-url citrea_testnet --broadcast --verify
+
+# If verification fails, deploy without verify first:
+forge script script/Deploy.s.sol --rpc-url citrea_testnet --broadcast
+```
+
+### Step 4: Update Backend Environment
+
+After deployment, update `backend/.env` with the printed addresses:
+
+```bash
+# Edit backend/.env and add the deployed addresses
+cd backend
+nano .env
+```
+
+Update with the addresses from deployment output:
+```env
+CITREA_RPC_URL=https://rpc.testnet.citrea.xyz
+PRIVATE_KEY=your_private_key_here
+REPUTATION_CONTRACT_ADDRESS=0x... # From deployment output
+NAMOSHI_CONTRACT_ADDRESS=0x...
+SATSUMA_CONTRACT_ADDRESS=0x...
+SPINE_CONTRACT_ADDRESS=0x...
+MINT_PARK_CONTRACT_ADDRESS=0x...
+ASIGNA_CONTRACT_ADDRESS=0x...
+DVOTE_CONTRACT_ADDRESS=0x...
+PORT=3001
+```
+
+---
+
+## 🧪 **Testing & Demo**
+
+### Step 1: Start Backend Monitoring
+
+```bash
+# In backend directory
+cd backend
+npm install
+npm run dev
+```
+
+You should see:
+```
+🚀 Starting Event Relay for Citrea Reputation System...
+✅ Connected to ReputationSBT contract, owner: 0x...
+📡 Setting up listeners for namoshi at 0x...
+👁️ Now watching 6 protocols for events
+🌐 Reputation API server running on http://localhost:3001
+```
+
+### Step 2: Generate Test Events
+
+Open a new terminal and run:
+
+```bash
+# Create a test script
+cat > script/Demo.s.sol << 'EOF'
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+import "forge-std/Script.sol";
+import "../src/MockProtocols.sol";
+
+contract Demo is Script {
+    function run() external {
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        
+        // Get deployed addresses from environment
+        address namoshiAddr = vm.envAddress("NAMOSHI_CONTRACT_ADDRESS");
+        address satsumaAddr = vm.envAddress("SATSUMA_CONTRACT_ADDRESS");
+        address spineAddr = vm.envAddress("SPINE_CONTRACT_ADDRESS");
+        address mintparkAddr = vm.envAddress("MINT_PARK_CONTRACT_ADDRESS");
+        address asignaAddr = vm.envAddress("ASIGNA_CONTRACT_ADDRESS");
+        address dvoteAddr = vm.envAddress("DVOTE_CONTRACT_ADDRESS");
+        
+        vm.startBroadcast(deployerPrivateKey);
+        
+        // 1. Register domain
+        MockNamoshiNameService(namoshiAddr).registerDomain{value: 0.001 ether}("alice");
+        
+        // 2. Trade on DEX
+        MockSatsumaDEX(satsumaAddr).swap(1 ether, 0, 0, 0.95 ether, msg.sender);
+        
+        // 3. Use lending
+        MockSpineLending(spineAddr).deposit{value: 0.01 ether}(5 ether);
+        
+        // 4. Mint NFT
+        MockMintParkNFT(mintparkAddr).mintNFT{value: 0.1 ether}(0.1 ether);
+        
+        // 5. Execute multisig
+        MockAsignaMultisig(asignaAddr).executeTransaction(msg.sender, 0, "");
+        
+        // 6. Vote on governance
+        MockDVoteGovernance(dvoteAddr).createProposal("Test proposal");
+        MockDVoteGovernance(dvoteAddr).vote(1, 1);
+        
+        vm.stopBroadcast();
+        
+        console.log("Demo transactions sent! Check backend logs for event processing.");
+    }
+}
+EOF
+
+# Run the demo
+forge script script/Demo.s.sol --rpc-url citrea_testnet --broadcast
+```
+
+### Step 3: Check Results
+
+Watch your backend terminal - you should see events being processed:
+```
+📈 Detected: namoshi.DomainRegistered | User: 0x... | Value: 1
+🔗 Relayed to contract: 0x...
+✅ Confirmed: namoshi.DomainRegistered for 0x... (1 value)
+```
+
+Query the API:
+```bash
+# Check reputation score
+curl http://localhost:3001/reputation/YOUR_WALLET_ADDRESS
+
+# Expected response:
 {
-    user: event.args.sender,                    // WHO: Trader
-    value: Math.max(amount0Out, amount1Out)     // WHAT: Output amount (swap size)
+  "success": true,
+  "data": {
+    "address": "0x...",
+    "totalScore": 241,
+    "breakdown": {
+      "namoshi": 50,
+      "dex": 1,
+      "lending": 30,
+      "nft": 20,
+      "multisig": 100,
+      "governance": 75
+    }
+  }
 }
+```
 
-// LP Provision Event
+### Step 4: Stress Test with Mass Activity
+
+```bash
+# Create mass activity script
+cat > script/MassDemo.s.sol << 'EOF'
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+import "forge-std/Script.sol";
+import "../src/MockProtocols.sol";
+
+contract MassDemo is Script {
+    function run() external {
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        address orchestratorAddr = vm.envAddress("DEMO_ORCHESTRATOR_ADDRESS");
+        
+        vm.startBroadcast(deployerPrivateKey);
+        
+        DemoOrchestrator orchestrator = DemoOrchestrator(orchestratorAddr);
+        
+        // Generate lots of activity
+        orchestrator.generateMassActivity{value: 2 ether}();
+        
+        vm.stopBroadcast();
+        
+        console.log("Mass activity generated! Check reputation score increase.");
+    }
+}
+EOF
+
+# Run mass demo
+forge script script/MassDemo.s.sol --rpc-url citrea_testnet --broadcast
+```
+
+---
+
+## 📊 **API Usage**
+
+### Available Endpoints
+
+```bash
+# Health check
+curl http://localhost:3001/health
+
+# Get user reputation
+curl http://localhost:3001/reputation/0x742d35Cc6aF12CC4469Dbb97Afb2D14a1fbEE524
+
+# System statistics
+curl http://localhost:3001/stats
+```
+
+### Response Format
+
+```json
 {
-    user: event.args.sender,                    // WHO: LP provider
-    value: amount0 + amount1                    // WHAT: Total liquidity added
+  "success": true,
+  "data": {
+    "address": "0x742d35Cc6aF12CC4469Dbb97Afb2D14a1fbEE524",
+    "totalScore": 1847,
+    "breakdown": {
+      "namoshi": 125,
+      "dex": 312,
+      "lending": 445,
+      "nft": 130,
+      "multisig": 400,
+      "governance": 435
+    }
+  }
 }
-```
-
-**Scoring Logic:**
-- **Swap**: 1 base + 0.001 per unit value, max 100/day, min $10
-- **LP**: 10 base + 0.01 per unit value, max 50/day, min $100
-
-**Why This Works:**
-✅ Larger trades indicate more committed users
-✅ LP provision is more valuable than simple swapping
-✅ Minimum thresholds prevent dust transaction farming
-
----
-
-### **3. Lending (Spine)**
-
-**Events We Monitor:**
-```solidity
-event Deposit(address indexed user, uint256 amount);
-event Borrow(address indexed user, uint256 amount);
-event Repay(address indexed user, uint256 amount);
-```
-
-**Data Extraction:**
-```typescript
-// All lending events follow same pattern
-{
-    user: event.args.user,          // WHO: Lender/borrower
-    value: event.args.amount        // WHAT: Amount deposited/borrowed/repaid
-}
-```
-
-**Scoring Logic:**
-- **Deposit**: 20 base + 0.01 per unit, max 200/day, min $100
-- **Borrow**: 50 base + 0.005 per unit, max 300/day, min $100
-- **Repay**: 30 base + 0.005 per unit, max 300/day, min $10
-
-**Why This Works:**
-✅ Borrowing shows higher engagement than just depositing
-✅ Repaying loans demonstrates responsibility
-✅ Amount scaling rewards larger capital deployment
-
----
-
-### **4. NFT Marketplace (Mint Park)**
-
-**Events We Monitor:**
-```solidity
-event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
-// Plus custom events with price data:
-event Sale(address indexed buyer, uint256 indexed tokenId, uint256 price);
-```
-
-**Data Extraction:**
-```typescript
-// NFT Purchase
-{
-    user: event.args.to,           // WHO: NFT buyer (ignoring mints from 0x0)
-    value: event.args.price || 1000 // WHAT: Purchase price or default value
-}
-```
-
-**Scoring Logic:**
-- **Purchase**: 10 base + 0.1 per unit price, max 50/day, min $1
-
-**Why This Works:**
-✅ NFT purchases show cultural engagement with ecosystem
-✅ Higher-value purchases get more points
-✅ Daily limits prevent wash trading
-
----
-
-### **5. Multisig Security (Asigna)**
-
-**Events We Monitor:**
-```solidity
-event ExecutionSuccess(bytes32 indexed txHash, uint256 payment);
-event AddedOwner(address owner);
-event SetupComplete(address[] owners, uint256 threshold);
-```
-
-**Data Extraction:**
-```typescript
-// Multisig Usage
-{
-    user: event.args.executor || event.args.owner,  // WHO: Multisig user
-    value: 1                                        // WHAT: Security action
-}
-```
-
-**Scoring Logic:**
-- **Execution**: 100 base points, max 500/day
-- **Setup**: 200 base points, max 200/day
-
-**Why This Works:**
-✅ Multisig usage indicates sophisticated, security-conscious users
-✅ High base points reflect importance of security practices
-✅ These users are typically higher-value for protocols
-
----
-
-### **6. DAO Governance (DVote)**
-
-**Events We Monitor:**
-```solidity
-event VoteCast(address indexed voter, uint256 proposalId, uint8 support, uint256 weight);
-event ProposalCreated(uint256 proposalId, address proposer, string description);
-```
-
-**Data Extraction:**
-```typescript
-// Governance Participation
-{
-    user: event.args.voter || event.args.proposer,  // WHO: Participant
-    value: event.args.weight || 1                   // WHAT: Voting weight
-}
-```
-
-**Scoring Logic:**
-- **Vote**: 25 base + 0.0001 per weight, max 100/day
-- **Proposal**: 50 base points, max 50/day
-
-**Why This Works:**
-✅ Governance participation shows long-term ecosystem commitment
-✅ Voting weight scaling rewards larger stakeholders
-✅ Creating proposals shows leadership
-
----
-
-## 🔍 Why Event Data is Reliable for Scoring
-
-### **1. Cryptographic Guarantees**
-
-**Events are part of blockchain consensus:**
-```
-Transaction → Execution → Events Emitted → Block Hash → Chain State
-```
-
-- Events are **included in transaction receipts**
-- Transaction receipts are **hashed into block headers**
-- Block headers are **secured by proof-of-work/stake**
-- **Cannot be faked** without controlling majority of network
-
-### **2. Complete Information**
-
-**Every meaningful action generates events:**
-```solidity
-function swap(uint amountIn, address tokenA, address tokenB) external {
-    // ... swap logic ...
-    
-    emit Swap(msg.sender, amountIn, amountOut, tokenA, tokenB);
-    //      ↑ WHO      ↑ HOW MUCH  ↑ WHAT
-}
-```
-
-**Events contain ALL data needed for scoring:**
-- ✅ **User identity** (msg.sender is cryptographically verified)
-- ✅ **Action type** (event name defines what happened)
-- ✅ **Value/amount** (transaction parameters)
-- ✅ **Timing** (block timestamp)
-- ✅ **Context** (contract address, transaction hash)
-
-### **3. Real-Time & Immutable**
-
-```typescript
-// Events are emitted immediately when transaction executes
-contract.on('Swap', (sender, amount, event) => {
-    // This fires within seconds of user action
-    // Event data is immutable once confirmed
-});
-```
-
-**Benefits:**
-- ✅ **Real-time processing** (no polling delays)
-- ✅ **Immutable history** (cannot be changed retroactively)
-- ✅ **Guaranteed delivery** (WebSocket auto-reconnects)
-
-### **4. Standard Patterns**
-
-**Most DeFi protocols follow similar event patterns:**
-
-| Action Type | Standard Event Pattern | Example |
-|-------------|------------------------|---------|
-| **Token Transfer** | `Transfer(from, to, amount)` | ERC20/721 |
-| **DEX Trade** | `Swap(user, amountIn, amountOut)` | Uniswap V2/V3 |
-| **Lending** | `Deposit(user, amount)` | Compound/Aave |
-| **Governance** | `VoteCast(voter, proposal, support)` | OpenZeppelin Governor |
-
-This standardization makes event processing **predictable and reliable**.
-
----
-
-## 🎮 Anti-Gaming Through Event Analysis
-
-### **1. Value Thresholds Prevent Dust Attacks**
-
-```typescript
-// Scoring rule with minimum value
-scoringRules["dex"]["Swap"] = {
-    basePoints: 1,
-    multiplier: 1000,     // 0.001 points per unit
-    maxPerDay: 100,
-    minValue: 10000,      // Must be > $10 equivalent
-    isActive: true
-};
-```
-
-**This prevents:**
-- 🚫 1000 tiny $0.01 swaps = 0 points (below minimum)
-- ✅ 1 large $1000 swap = 2 points (1 base + 1 bonus)
-
-### **2. Daily Limits Prevent Spam**
-
-```solidity
-function _getDailyUsage(address user, string protocol, string eventType) 
-    internal view returns (uint256) {
-    uint256 currentDay = block.timestamp / 86400;
-    uint256 lastDay = userReputations[user].lastActionDay[protocol][eventType];
-    
-    if (lastDay < currentDay) return 0; // New day, reset
-    return userReputations[user].dailyUsage[protocol][eventType];
-}
-```
-
-**This prevents:**
-- 🚫 Infinite point farming through repetitive actions
-- ✅ Encourages diverse activity across protocols
-
-### **3. Transaction Hash Deduplication**
-
-```solidity
-mapping(bytes32 => bool) public processedEvents;
-
-function processProtocolEvent(..., bytes32 transactionHash, ...) {
-    require(!processedEvents[transactionHash], "Event already processed");
-    processedEvents[transactionHash] = true;
-    // ...
-}
-```
-
-**This prevents:**
-- 🚫 Processing same transaction multiple times
-- 🚫 Replay attacks with old transaction data
-
----
-
-## 📈 Score Calculation Examples
-
-### **Example 1: Active DeFi User**
-
-**Day 1 Activity:**
-```
-1. Register domain "alice.btc" → 50 points (namoshi)
-2. Swap $500 worth of tokens → 1.5 points (dex: 1 base + 0.5 bonus)
-3. Deposit $1000 to lending → 30 points (lending: 20 base + 10 bonus)
-4. Buy NFT for $50 → 15 points (nft: 10 base + 5 bonus)
-
-Total Day 1: 96.5 points
-```
-
-**Day 2 Activity:**
-```
-1. Provide $2000 in liquidity → 30 points (dex: 10 base + 20 bonus)
-2. Borrow $800 → 54 points (lending: 50 base + 4 bonus)
-3. Vote on DAO proposal → 25 points (governance)
-
-Total Day 2: 109 points
-Running Total: 205.5 points
-```
-
-### **Example 2: Gaming Attempt (Fails)**
-
-**Attempted Gaming:**
-```
-1. 100 tiny $1 swaps → 0 points (below $10 minimum)
-2. Register 10 domains → 200 points max (daily limit reached after 4 domains)
-3. Spam NFT trades → Limited by daily cap
-
-Result: Minimal points despite high activity
 ```
 
 ---
 
-## ✅ Conclusion: Events Are Perfect for Reputation
+## 🎮 **Advanced Demo Scenarios**
 
-**Event-based scoring is not just reliable - it's ideal because:**
+### Scenario 1: New User Journey
 
-1. **🔒 Cryptographically Secure** - Cannot be faked or manipulated
-2. **📊 Complete Data** - Contains all information needed for fair scoring  
-3. **⚡ Real-Time** - Immediate processing as actions happen
-4. **🎯 Precise** - Exact amounts, users, and contexts
-5. **🛡️ Anti-Gaming** - Built-in protection against manipulation
-6. **📈 Scalable** - Works across any number of protocols
-7. **🔄 Standardized** - Similar patterns across all DeFi protocols
+```bash
+cat > script/NewUser.s.sol << 'EOF'
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
 
-**The beauty of this system is its simplicity:** Users perform normal DeFi actions, events are automatically emitted by protocols, our backend relays the data, and the smart contract calculates fair, anti-gamed reputation scores.
+import "forge-std/Script.sol";
+import "../src/MockProtocols.sol";
 
-**No special integrations needed, no data can be faked, no complex off-chain infrastructure required.** Just pure, reliable blockchain events driving a sophisticated reputation system.
+contract NewUser is Script {
+    function run() external {
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        
+        vm.startBroadcast(deployerPrivateKey);
+        
+        // Small activities for new user
+        MockNamoshiNameService(vm.envAddress("NAMOSHI_CONTRACT_ADDRESS"))
+            .registerDomain{value: 0.001 ether}("newbie");
+            
+        MockSatsumaDEX(vm.envAddress("SATSUMA_CONTRACT_ADDRESS"))
+            .swap(0.1 ether, 0, 0, 0.095 ether, msg.sender);
+            
+        MockDVoteGovernance(vm.envAddress("DVOTE_CONTRACT_ADDRESS"))
+            .vote(1, 1);
+        
+        vm.stopBroadcast();
+        
+        console.log("New user journey completed!");
+    }
+}
+EOF
+
+forge script script/NewUser.s.sol --rpc-url citrea_testnet --broadcast
+```
+
+### Scenario 2: DeFi Power User
+
+```bash
+cat > script/PowerUser.s.sol << 'EOF'
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+import "forge-std/Script.sol";
+import "../src/MockProtocols.sol";
+
+contract PowerUser is Script {
+    function run() external {
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        
+        vm.startBroadcast(deployerPrivateKey);
+        
+        // Large activities
+        MockSpineLending(vm.envAddress("SPINE_CONTRACT_ADDRESS"))
+            .deposit{value: 0.1 ether}(100 ether);  // $100k
+            
+        MockSatsumaDEX(vm.envAddress("SATSUMA_CONTRACT_ADDRESS"))
+            .addLiquidity(50 ether, 50 ether);  // $100k LP
+            
+        MockMintParkNFT(vm.envAddress("MINT_PARK_CONTRACT_ADDRESS"))
+            .mintNFT{value: 5 ether}(5 ether);  // $5k NFT
+        
+        vm.stopBroadcast();
+        
+        console.log("Power user activities completed!");
+    }
+}
+EOF
+
+forge script script/PowerUser.s.sol --rpc-url citrea_testnet --broadcast
+```
+
+---
+
+## 🔧 **Maintenance & Updates**
+
+### Update Scoring Rules
+
+```bash
+# Create admin script to update scoring
+cast send $REPUTATION_CONTRACT_ADDRESS \
+  "setScoringRule(string,string,uint256,uint256,uint256,uint256,bool)" \
+  "dex" "Swap" 2 2000 150 5000 true \
+  --rpc-url citrea_testnet \
+  --private-key $PRIVATE_KEY
+```
+
+### Add New Protocol
+
+```bash
+# Add new protocol support
+cast send $REPUTATION_CONTRACT_ADDRESS \
+  "addProtocol(string)" \
+  "newprotocol" \
+  --rpc-url citrea_testnet \
+  --private-key $PRIVATE_KEY
+```
+
+### Query Contract State
+
+```bash
+# Check current scoring rules
+cast call $REPUTATION_CONTRACT_ADDRESS \
+  "getScoringRule(string,string)" \
+  "dex" "Swap" \
+  --rpc-url citrea_testnet
+
+# Check user reputation
+cast call $REPUTATION_CONTRACT_ADDRESS \
+  "getReputationScore(address)" \
+  $USER_ADDRESS \
+  --rpc-url citrea_testnet
+```
+
+---
+
+## 🐛 **Troubleshooting**
+
+### Backend Not Detecting Events
+```bash
+# Check if backend wallet is authorized
+cast call $REPUTATION_CONTRACT_ADDRESS \
+  "authorizedRelays(address)" \
+  $BACKEND_WALLET_ADDRESS \
+  --rpc-url citrea_testnet
+
+# Authorize if needed
+cast send $REPUTATION_CONTRACT_ADDRESS \
+  "setAuthorizedRelay(address,bool)" \
+  $BACKEND_WALLET_ADDRESS true \
+  --rpc-url citrea_testnet \
+  --private-key $PRIVATE_KEY
+```
+
+### Contract Interaction Issues
+```bash
+# Check contract owner
+cast call $REPUTATION_CONTRACT_ADDRESS \
+  "owner()" \
+  --rpc-url citrea_testnet
+
+# Check if events are being emitted
+cast logs --rpc-url citrea_testnet \
+  --address $SATSUMA_CONTRACT_ADDRESS \
+  --from-block latest
+```
+
+### API Not Responding
+```bash
+# Check if backend is running
+curl -I http://localhost:3001/health
+
+# Check backend logs for errors
+cd backend && npm run dev
+```
+
+---
+
+## 🎯 **Success Metrics**
+
+After running the setup, you should achieve:
+
+✅ **Smart Contracts Deployed** - All contracts on Citrea testnet  
+✅ **Backend Running** - Real-time event monitoring active  
+✅ **Events Processing** - Console showing event detection and processing  
+✅ **API Functional** - REST endpoints returning reputation data  
+✅ **Anti-Gaming Working** - Daily limits preventing spam  
+✅ **Multi-Protocol Support** - Scores from all 6 protocol types  
+
+---
+
+## 📈 **What's Next?**
+
+1. **Mainnet Deployment** - Deploy when Citrea mainnet launches (Q1 2025)
+2. **Real Protocol Integration** - Connect with actual Citrea protocols
+3. **Frontend Dashboard** - Build user-facing reputation interface
+4. **Lending Integration** - Partner with protocols for undercollateralized loans
+5. **Advanced Features** - Time decay, reputation staking, cross-chain support
+
+---
+
+## 🤝 **Contributing**
+
+1. Fork the repository
+2. Create feature branch: `git checkout -b feature/amazing-feature`
+3. Commit changes: `git commit -m 'Add amazing feature'`
+4. Push to branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request
+
+---
+
+## 📄 **License**
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🆘 **Support**
+
+- **Discord**: [Citrea Community](https://discord.gg/citrea)
+- **Twitter**: [@CitreaReputation](https://twitter.com/CitreaReputation)
+- **Email**: support@citrea-reputation.com
+
+---
+
+**Built with ❤️ for the Bitcoin DeFi ecosystem** 🚀
