@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { ArrowRight, Target, BarChart3, Trophy, TrendingUp } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { ConnectWallet } from "@/components/ConnectWallet"
+import { ArrowRight, Target, BarChart3, Trophy, TrendingUp, CreditCard, FileCheck, Zap, Brain, Activity, Shield } from "lucide-react"
 
 export default function HomePage() {
   const heroRef = useRef<HTMLDivElement>(null)
@@ -136,9 +137,7 @@ export default function HomePage() {
             </Link>
           </nav>
 
-          <Button className="bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 text-slate-900 font-medium ripple">
-            Connect Wallet
-          </Button>
+          <ConnectWallet />
         </div>
       </header>
 
@@ -348,6 +347,133 @@ export default function HomePage() {
                 <p className="text-slate-600">Access exclusive opportunities, better rates, and governance power</p>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* More Than a Sybil Score - NEW SECTION */}
+      <section className="py-16 px-4 bg-slate-50 relative">
+        <div className="container mx-auto max-w-6xl">
+          <div className="text-center mb-12 reveal">
+            <h2 className="text-4xl font-bold text-slate-800 mb-4 gradient-text">More Than a Sybil Score</h2>
+            <p className="text-xl text-slate-600 max-w-4xl mx-auto">
+              Provenance provides deep, continuous behavioral analysis, not just a one-time identity check.
+            </p>
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-8">
+            {/* Complementary, Not Competitive */}
+            <Card className="glass-card hover-lift reveal reveal-stagger" style={{ "--delay": "0.1s" } as any}>
+              <CardHeader>
+                <CardTitle className="text-2xl text-slate-800 flex items-center">
+                  <div className="flex items-center space-x-3 mr-4">
+                    <FileCheck className="h-8 w-8 text-blue-500" />
+                    <span className="text-2xl">+</span>
+                    <CreditCard className="h-8 w-8 text-purple-500" />
+                  </div>
+                  Complementary, Not Competitive
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-400">
+                  <div className="flex items-center mb-2">
+                    <FileCheck className="h-5 w-5 text-blue-500 mr-2" />
+                    <h4 className="font-bold text-blue-800">Identity Solutions = Government ID</h4>
+                  </div>
+                  <ul className="text-sm text-blue-700 space-y-1">
+                    <li>• Proves you're a real, unique person</li>
+                    <li>• Binary verification (verified or not)</li>
+                    <li>• One-time process</li>
+                    <li>• Prevents sybil attacks and bot farms</li>
+                  </ul>
+                </div>
+
+                <div className="bg-purple-50 p-4 rounded-lg border-l-4 border-purple-400">
+                  <div className="flex items-center mb-2">
+                    <CreditCard className="h-5 w-5 text-purple-500 mr-2" />
+                    <h4 className="font-bold text-purple-800">Provenance = Credit Score</h4>
+                  </div>
+                  <ul className="text-sm text-purple-700 space-y-1">
+                    <li>• Measures your on-chain behavior and trustworthiness</li>
+                    <li>• Continuous numerical score (0-∞ points)</li>
+                    <li>• Ongoing assessment based on activity</li>
+                    <li>• Enables undercollateralized lending</li>
+                  </ul>
+                </div>
+
+                <div className="bg-slate-100 p-4 rounded-lg">
+                  <p className="text-sm text-slate-700 font-medium">
+                    <strong>Real-world analogy:</strong> Getting a bank loan requires BOTH a valid government ID and a good credit score. 
+                    DeFi lending could require BOTH identity verification and high Provenance reputation.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Your Unique Value Proposition */}
+            <Card className="glass-card hover-lift reveal reveal-stagger" style={{ "--delay": "0.2s" } as any}>
+              <CardHeader>
+                <CardTitle className="text-2xl text-slate-800 flex items-center">
+                  <Zap className="h-8 w-8 text-yellow-500 mr-3" />
+                  Your Unique Value Proposition
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <div className="flex items-start space-x-3">
+                    <Brain className="h-6 w-6 text-green-500 mt-1 flex-shrink-0" />
+                    <div>
+                      <h4 className="font-bold text-slate-800 mb-1">Ecosystem-Specific Intelligence</h4>
+                      <p className="text-sm text-slate-600">
+                        Deep understanding of Bitcoin/Citrea behavior: domain registration, DeFi sophistication, 
+                        security consciousness, and governance participation.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-3">
+                    <Activity className="h-6 w-6 text-blue-500 mt-1 flex-shrink-0" />
+                    <div>
+                      <h4 className="font-bold text-slate-800 mb-1">Continuous Assessment</h4>
+                      <p className="text-sm text-slate-600">
+                        Unlike one-time verification, provides ongoing intelligence: recent activity patterns, 
+                        engagement across protocols, and long-term ecosystem commitment.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-3">
+                    <TrendingUp className="h-6 w-6 text-purple-500 mt-1 flex-shrink-0" />
+                    <div>
+                      <h4 className="font-bold text-slate-800 mb-1">Financial Behavior Signals</h4>
+                      <p className="text-sm text-slate-600">
+                        Direct correlation with financial trustworthiness: loan repayment likelihood, 
+                        sophisticated vs casual user identification, and transaction value patterns.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-3">
+                    <Shield className="h-6 w-6 text-orange-500 mt-1 flex-shrink-0" />
+                    <div>
+                      <h4 className="font-bold text-slate-800 mb-1">Anti-Gaming Through Activity</h4>
+                      <p className="text-sm text-slate-600">
+                        Prevents gaming through economic barriers: real transaction costs, time investment 
+                        across multiple protocols, and diminishing returns on farming.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-r from-yellow-50 to-purple-50 p-4 rounded-lg border border-yellow-200">
+                  <p className="text-sm font-medium text-slate-800">
+                    <strong>Bottom Line:</strong> We answer "Is this a good person to do business with?" 
+                    while identity solutions answer "Is this a real person?" Both questions are valuable 
+                    and complementary. 🤝
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </section>

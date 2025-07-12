@@ -9,13 +9,58 @@ import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, Play, RotateCcw, Share2, Sparkles, Zap, Star } from "lucide-react"
+import { ArrowLeft, Play, RotateCcw, Share2, Sparkles, Zap, Star, Info } from "lucide-react"
+import { useWeb3 } from "@/context/Web3Context"
+import { 
+  registerDomain, 
+  swapTokens, 
+  addLiquidity, 
+  depositToSpine, 
+  borrowFromSpine, 
+  repayToSpine,
+  mintNFT,
+  executeMultisigTransaction,
+  createProposal,
+  castVote,
+  waitForTransaction 
+} from "@/lib/contracts"
 
 export default function PlaygroundPage() {
   const [currentScore, setCurrentScore] = useState(0)
   const [completedStations, setCompletedStations] = useState<number[]>([])
   const [currentStation, setCurrentStation] = useState(0)
   const [celebrationActive, setCelebrationActive] = useState(false)
+  const [isProcessingTransaction, setIsProcessingTransaction] = useState(false)
+
+  // Form states for each station
+  const [domainName, setDomainName] = useState("")
+  
+  // Satsuma DEX states
+  const [swapFromAmount, setSwapFromAmount] = useState("")
+  const [swapToAmount, setSwapToAmount] = useState("")
+  const [liquidityBTC, setLiquidityBTC] = useState("")
+  const [liquidityUSDT, setLiquidityUSDT] = useState("")
+  
+  // Spine Lending states
+  const [depositAmount, setDepositAmount] = useState("")
+  const [borrowAmount, setBorrowAmount] = useState("")
+  const [repayAmount, setRepayAmount] = useState("")
+  
+  // MintPark NFT states
+  const [nftName, setNftName] = useState("")
+  const [nftPrice, setNftPrice] = useState("")
+  
+  // Asigna Multisig states
+  const [multisigDestination, setMultisigDestination] = useState("")
+  const [multisigValue, setMultisigValue] = useState("")
+  
+  // DVote Governance states
+  const [proposalTitle, setProposalTitle] = useState("")
+  const [proposalDescription, setProposalDescription] = useState("")
+  const [proposalId, setProposalId] = useState("")
+
+  // Get web3 context
+  const { signer, isConnected } = useWeb3()
 
   const stations = [
     {
@@ -87,6 +132,387 @@ export default function PlaygroundPage() {
     }
   }
 
+  // Handle domain registration with real contract interaction
+  const handleRegisterDomain = async () => {
+    if (!isConnected || !signer) {
+      alert('Please connect your wallet first!')
+      return
+    }
+
+    if (!domainName.trim()) {
+      alert('Please enter a domain name!')
+      return
+    }
+
+    try {
+      setIsProcessingTransaction(true)
+      console.log(`🏷️ Registering domain: ${domainName}`)
+      
+      const tx = await registerDomain(domainName, signer)
+      console.log(`⏳ Transaction sent: ${tx.hash}`)
+      alert(`Transaction sent! Hash: ${tx.hash}`)
+      
+      const receipt = await waitForTransaction(tx)
+      if (receipt) {
+        console.log(`✅ Domain registered successfully!`)
+        alert(`Success! Domain "${domainName}" registered successfully!`)
+        completeStation(0)
+      }
+    } catch (error: any) {
+      console.error('❌ Error registering domain:', error)
+      if (error.code === 4001) {
+        alert('Transaction was rejected by user.')
+      } else if (error.message?.includes('insufficient funds')) {
+        alert('Insufficient funds for transaction.')
+      } else {
+        alert(`Failed to register domain: ${error.message || 'Unknown error'}`)
+      }
+    } finally {
+      setIsProcessingTransaction(false)
+    }
+  }
+
+  // Handle DEX operations
+  const handleSwapTokens = async () => {
+    if (!isConnected || !signer) {
+      alert('Please connect your wallet first!')
+      return
+    }
+
+    if (!swapFromAmount || !swapToAmount) {
+      alert('Please enter swap amounts!')
+      return
+    }
+
+    try {
+      setIsProcessingTransaction(true)
+      console.log(`🔄 Swapping ${swapFromAmount} BTC for ${swapToAmount} USDT`)
+      
+      const tx = await swapTokens(swapFromAmount, "0", "0", swapToAmount, signer)
+      console.log(`⏳ Transaction sent: ${tx.hash}`)
+      alert(`Swap transaction sent! Hash: ${tx.hash}`)
+      
+      const receipt = await waitForTransaction(tx)
+      if (receipt) {
+        console.log(`✅ Swap completed successfully!`)
+        alert(`Success! Tokens swapped successfully!`)
+        completeStation(1)
+      }
+    } catch (error: any) {
+      console.error('❌ Error swapping tokens:', error)
+      if (error.code === 4001) {
+        alert('Transaction was rejected by user.')
+      } else {
+        alert(`Failed to swap tokens: ${error.message || 'Unknown error'}`)
+      }
+    } finally {
+      setIsProcessingTransaction(false)
+    }
+  }
+
+  const handleAddLiquidity = async () => {
+    if (!isConnected || !signer) {
+      alert('Please connect your wallet first!')
+      return
+    }
+
+    if (!liquidityBTC || !liquidityUSDT) {
+      alert('Please enter liquidity amounts!')
+      return
+    }
+
+    try {
+      setIsProcessingTransaction(true)
+      console.log(`🔄 Adding liquidity: ${liquidityBTC} BTC + ${liquidityUSDT} USDT`)
+      
+      const tx = await addLiquidity(liquidityBTC, liquidityUSDT, "0", "0", signer)
+      console.log(`⏳ Transaction sent: ${tx.hash}`)
+      alert(`Liquidity transaction sent! Hash: ${tx.hash}`)
+      
+      const receipt = await waitForTransaction(tx)
+      if (receipt) {
+        console.log(`✅ Liquidity added successfully!`)
+        alert(`Success! Liquidity added successfully!`)
+        completeStation(1)
+      }
+    } catch (error: any) {
+      console.error('❌ Error adding liquidity:', error)
+      if (error.code === 4001) {
+        alert('Transaction was rejected by user.')
+      } else {
+        alert(`Failed to add liquidity: ${error.message || 'Unknown error'}`)
+      }
+    } finally {
+      setIsProcessingTransaction(false)
+    }
+  }
+
+  // Handle lending operations
+  const handleDeposit = async () => {
+    if (!isConnected || !signer) {
+      alert('Please connect your wallet first!')
+      return
+    }
+
+    if (!depositAmount) {
+      alert('Please enter deposit amount!')
+      return
+    }
+
+    try {
+      setIsProcessingTransaction(true)
+      console.log(`🏦 Depositing ${depositAmount} BTC`)
+      
+      const tx = await depositToSpine(depositAmount, signer)
+      console.log(`⏳ Transaction sent: ${tx.hash}`)
+      alert(`Deposit transaction sent! Hash: ${tx.hash}`)
+      
+      const receipt = await waitForTransaction(tx)
+      if (receipt) {
+        console.log(`✅ Deposit completed successfully!`)
+        alert(`Success! ${depositAmount} BTC deposited successfully!`)
+        completeStation(2)
+      }
+    } catch (error: any) {
+      console.error('❌ Error depositing:', error)
+      if (error.code === 4001) {
+        alert('Transaction was rejected by user.')
+      } else {
+        alert(`Failed to deposit: ${error.message || 'Unknown error'}`)
+      }
+    } finally {
+      setIsProcessingTransaction(false)
+    }
+  }
+
+  const handleBorrow = async () => {
+    if (!isConnected || !signer) {
+      alert('Please connect your wallet first!')
+      return
+    }
+
+    if (!borrowAmount) {
+      alert('Please enter borrow amount!')
+      return
+    }
+
+    try {
+      setIsProcessingTransaction(true)
+      console.log(`🏦 Borrowing ${borrowAmount} USDT`)
+      
+      const tx = await borrowFromSpine(borrowAmount, signer)
+      console.log(`⏳ Transaction sent: ${tx.hash}`)
+      alert(`Borrow transaction sent! Hash: ${tx.hash}`)
+      
+      const receipt = await waitForTransaction(tx)
+      if (receipt) {
+        console.log(`✅ Borrow completed successfully!`)
+        alert(`Success! ${borrowAmount} USDT borrowed successfully!`)
+        completeStation(2)
+      }
+    } catch (error: any) {
+      console.error('❌ Error borrowing:', error)
+      if (error.code === 4001) {
+        alert('Transaction was rejected by user.')
+      } else {
+        alert(`Failed to borrow: ${error.message || 'Unknown error'}`)
+      }
+    } finally {
+      setIsProcessingTransaction(false)
+    }
+  }
+
+  const handleRepay = async () => {
+    if (!isConnected || !signer) {
+      alert('Please connect your wallet first!')
+      return
+    }
+
+    if (!repayAmount) {
+      alert('Please enter repay amount!')
+      return
+    }
+
+    try {
+      setIsProcessingTransaction(true)
+      console.log(`🏦 Repaying ${repayAmount} USDT`)
+      
+      const tx = await repayToSpine(repayAmount, signer)
+      console.log(`⏳ Transaction sent: ${tx.hash}`)
+      alert(`Repay transaction sent! Hash: ${tx.hash}`)
+      
+      const receipt = await waitForTransaction(tx)
+      if (receipt) {
+        console.log(`✅ Repayment completed successfully!`)
+        alert(`Success! ${repayAmount} USDT repaid successfully!`)
+        completeStation(2)
+      }
+    } catch (error: any) {
+      console.error('❌ Error repaying:', error)
+      if (error.code === 4001) {
+        alert('Transaction was rejected by user.')
+      } else {
+        alert(`Failed to repay: ${error.message || 'Unknown error'}`)
+      }
+    } finally {
+      setIsProcessingTransaction(false)
+    }
+  }
+
+  // Handle NFT operations
+  const handleMintNFT = async () => {
+    if (!isConnected || !signer) {
+      alert('Please connect your wallet first!')
+      return
+    }
+
+    if (!nftName) {
+      alert('Please enter NFT name!')
+      return
+    }
+
+    try {
+      setIsProcessingTransaction(true)
+      console.log(`🎨 Minting NFT: ${nftName}`)
+      
+      const tokenURI = `https://metadata.example.com/${nftName.replace(/\s+/g, '_').toLowerCase()}`
+      const tx = await mintNFT(tokenURI, signer)
+      console.log(`⏳ Transaction sent: ${tx.hash}`)
+      alert(`NFT mint transaction sent! Hash: ${tx.hash}`)
+      
+      const receipt = await waitForTransaction(tx)
+      if (receipt) {
+        console.log(`✅ NFT minted successfully!`)
+        alert(`Success! NFT "${nftName}" minted successfully!`)
+        completeStation(3)
+      }
+    } catch (error: any) {
+      console.error('❌ Error minting NFT:', error)
+      if (error.code === 4001) {
+        alert('Transaction was rejected by user.')
+      } else {
+        alert(`Failed to mint NFT: ${error.message || 'Unknown error'}`)
+      }
+    } finally {
+      setIsProcessingTransaction(false)
+    }
+  }
+
+  // Handle multisig operations
+  const handleExecuteMultisig = async () => {
+    if (!isConnected || !signer) {
+      alert('Please connect your wallet first!')
+      return
+    }
+
+    if (!multisigDestination || !multisigValue) {
+      alert('Please enter transaction details!')
+      return
+    }
+
+    try {
+      setIsProcessingTransaction(true)
+      console.log(`🔐 Executing multisig transaction to ${multisigDestination}`)
+      
+      const tx = await executeMultisigTransaction(multisigDestination, multisigValue, "0x", signer)
+      console.log(`⏳ Transaction sent: ${tx.hash}`)
+      alert(`Multisig transaction sent! Hash: ${tx.hash}`)
+      
+      const receipt = await waitForTransaction(tx)
+      if (receipt) {
+        console.log(`✅ Multisig transaction executed successfully!`)
+        alert(`Success! Multisig transaction executed successfully!`)
+        completeStation(4)
+      }
+    } catch (error: any) {
+      console.error('❌ Error executing multisig transaction:', error)
+      if (error.code === 4001) {
+        alert('Transaction was rejected by user.')
+      } else {
+        alert(`Failed to execute multisig transaction: ${error.message || 'Unknown error'}`)
+      }
+    } finally {
+      setIsProcessingTransaction(false)
+    }
+  }
+
+  // Handle governance operations
+  const handleCreateProposal = async () => {
+    if (!isConnected || !signer) {
+      alert('Please connect your wallet first!')
+      return
+    }
+
+    if (!proposalTitle || !proposalDescription) {
+      alert('Please enter proposal details!')
+      return
+    }
+
+    try {
+      setIsProcessingTransaction(true)
+      console.log(`🗳️ Creating proposal: ${proposalTitle}`)
+      
+      const description = `${proposalTitle}: ${proposalDescription}`
+      const votingPeriod = 7 * 24 * 60 * 60 // 7 days in seconds
+      const tx = await createProposal(description, votingPeriod, signer)
+      console.log(`⏳ Transaction sent: ${tx.hash}`)
+      alert(`Proposal creation transaction sent! Hash: ${tx.hash}`)
+      
+      const receipt = await waitForTransaction(tx)
+      if (receipt) {
+        console.log(`✅ Proposal created successfully!`)
+        alert(`Success! Proposal "${proposalTitle}" created successfully!`)
+        completeStation(5)
+      }
+    } catch (error: any) {
+      console.error('❌ Error creating proposal:', error)
+      if (error.code === 4001) {
+        alert('Transaction was rejected by user.')
+      } else {
+        alert(`Failed to create proposal: ${error.message || 'Unknown error'}`)
+      }
+    } finally {
+      setIsProcessingTransaction(false)
+    }
+  }
+
+  const handleCastVote = async () => {
+    if (!isConnected || !signer) {
+      alert('Please connect your wallet first!')
+      return
+    }
+
+    if (!proposalId) {
+      alert('Please enter proposal ID!')
+      return
+    }
+
+    try {
+      setIsProcessingTransaction(true)
+      console.log(`🗳️ Casting vote on proposal #${proposalId}`)
+      
+      const tx = await castVote(parseInt(proposalId), true, signer) // voting "yes"
+      console.log(`⏳ Transaction sent: ${tx.hash}`)
+      alert(`Vote transaction sent! Hash: ${tx.hash}`)
+      
+      const receipt = await waitForTransaction(tx)
+      if (receipt) {
+        console.log(`✅ Vote cast successfully!`)
+        alert(`Success! Vote cast on proposal #${proposalId}!`)
+        completeStation(5)
+      }
+    } catch (error: any) {
+      console.error('❌ Error casting vote:', error)
+      if (error.code === 4001) {
+        alert('Transaction was rejected by user.')
+      } else {
+        alert(`Failed to cast vote: ${error.message || 'Unknown error'}`)
+      }
+    } finally {
+      setIsProcessingTransaction(false)
+    }
+  }
+
   const createCelebrationParticles = () => {
     for (let i = 0; i < 20; i++) {
       const particle = document.createElement("div")
@@ -107,6 +533,22 @@ export default function PlaygroundPage() {
     setCurrentScore(0)
     setCompletedStations([])
     setCurrentStation(0)
+    // Reset all form states
+    setDomainName("")
+    setSwapFromAmount("")
+    setSwapToAmount("")
+    setLiquidityBTC("")
+    setLiquidityUSDT("")
+    setDepositAmount("")
+    setBorrowAmount("")
+    setRepayAmount("")
+    setNftName("")
+    setNftPrice("")
+    setMultisigDestination("")
+    setMultisigValue("")
+    setProposalTitle("")
+    setProposalDescription("")
+    setProposalId("")
   }
 
   const progressPercentage = (completedStations.length / stations.length) * 100
@@ -198,6 +640,23 @@ export default function PlaygroundPage() {
           <p className="text-xl text-slate-600 mb-6 max-w-3xl mx-auto">
             Experience how your actions build reputation across the Citrea ecosystem
           </p>
+
+          {/* Disclaimer Box */}
+          <div className="max-w-4xl mx-auto mb-8">
+            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg">
+              <div className="flex items-start">
+                <Info className="h-5 w-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
+                <div className="text-sm text-blue-800">
+                  <p className="font-medium mb-1">Demo Environment</p>
+                  <p>
+                    This is a simulation to demonstrate how the Provenance reputation system will work. 
+                    The protocols listed are not yet live. Actions taken here are for illustrative purposes 
+                    and do not affect your actual on-chain reputation.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
 
           {/* Progress Indicator */}
           <div className="max-w-md mx-auto">
@@ -314,18 +773,37 @@ export default function PlaygroundPage() {
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="glass-card p-4">
                     <Label htmlFor="domain">Domain Name</Label>
-                    <Input id="domain" placeholder="yourname.btc" className="mt-2" />
+                    <Input 
+                      id="domain" 
+                      placeholder="yourname.btc" 
+                      className="mt-2"
+                      value={domainName}
+                      onChange={(e) => setDomainName(e.target.value)}
+                      disabled={isProcessingTransaction}
+                    />
                   </div>
                   <div className="flex items-end">
                     <Button
-                      onClick={() => completeStation(0)}
-                      disabled={completedStations.includes(0)}
+                      onClick={handleRegisterDomain}
+                      disabled={completedStations.includes(0) || isProcessingTransaction}
                       className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 ripple magnetic"
                     >
-                      {completedStations.includes(0) ? "Completed ✓" : "Register Domain"}
+                      {isProcessingTransaction 
+                        ? "Processing..." 
+                        : completedStations.includes(0) 
+                          ? "Completed ✓" 
+                          : "Simulate: Register Domain"
+                      }
                     </Button>
                   </div>
                 </div>
+                {!isConnected && (
+                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
+                    <p className="text-sm text-yellow-800">
+                      <strong>Connect your wallet</strong> to try the domain registration simulation.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -339,29 +817,63 @@ export default function PlaygroundPage() {
                   <div className="glass-card p-4 space-y-4">
                     <h4 className="font-medium">Swap Tokens</h4>
                     <div className="space-y-2">
-                      <Label>From</Label>
-                      <Input placeholder="0.0 BTC" />
-                      <Label>To</Label>
-                      <Input placeholder="0.0 USDT" />
+                      <Label>From Amount (BTC)</Label>
+                      <Input 
+                        placeholder="0.0" 
+                        value={swapFromAmount}
+                        onChange={(e) => setSwapFromAmount(e.target.value)}
+                        disabled={isProcessingTransaction}
+                      />
+                      <Label>To Amount (USDT)</Label>
+                      <Input 
+                        placeholder="0.0" 
+                        value={swapToAmount}
+                        onChange={(e) => setSwapToAmount(e.target.value)}
+                        disabled={isProcessingTransaction}
+                      />
                     </div>
+                    <Button 
+                      onClick={handleSwapTokens}
+                      disabled={isProcessingTransaction}
+                      className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
+                    >
+                      {isProcessingTransaction ? "Processing..." : "Swap Tokens"}
+                    </Button>
                   </div>
                   <div className="glass-card p-4 space-y-4">
                     <h4 className="font-medium">Provide Liquidity</h4>
                     <div className="space-y-2">
                       <Label>BTC Amount</Label>
-                      <Input placeholder="0.0 BTC" />
+                      <Input 
+                        placeholder="0.0" 
+                        value={liquidityBTC}
+                        onChange={(e) => setLiquidityBTC(e.target.value)}
+                        disabled={isProcessingTransaction}
+                      />
                       <Label>USDT Amount</Label>
-                      <Input placeholder="0.0 USDT" />
+                      <Input 
+                        placeholder="0.0" 
+                        value={liquidityUSDT}
+                        onChange={(e) => setLiquidityUSDT(e.target.value)}
+                        disabled={isProcessingTransaction}
+                      />
                     </div>
+                    <Button 
+                      onClick={handleAddLiquidity}
+                      disabled={isProcessingTransaction}
+                      className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
+                    >
+                      {isProcessingTransaction ? "Processing..." : "Add Liquidity"}
+                    </Button>
                   </div>
                 </div>
-                <Button
-                  onClick={() => completeStation(1)}
-                  disabled={completedStations.includes(1)}
-                  className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 ripple magnetic"
-                >
-                  {completedStations.includes(1) ? "Completed ✓" : "Execute Trade"}
-                </Button>
+                {!isConnected && (
+                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
+                    <p className="text-sm text-yellow-800">
+                      <strong>Connect your wallet</strong> to try DEX operations.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -373,34 +885,64 @@ export default function PlaygroundPage() {
                 </h3>
                 <div className="grid md:grid-cols-3 gap-4">
                   <div className="glass-card p-4">
-                    <Label>Deposit Amount</Label>
-                    <Input placeholder="0.0 BTC" className="mt-2" />
-                    <Button variant="outline" className="w-full mt-2 bg-transparent magnetic">
-                      Deposit
+                    <Label>Deposit Amount (BTC)</Label>
+                    <Input 
+                      placeholder="0.0" 
+                      className="mt-2" 
+                      value={depositAmount}
+                      onChange={(e) => setDepositAmount(e.target.value)}
+                      disabled={isProcessingTransaction}
+                    />
+                    <Button 
+                      onClick={handleDeposit}
+                      disabled={isProcessingTransaction}
+                      className="w-full mt-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700"
+                    >
+                      {isProcessingTransaction ? "Processing..." : "Deposit"}
                     </Button>
                   </div>
                   <div className="glass-card p-4">
-                    <Label>Borrow Amount</Label>
-                    <Input placeholder="0.0 USDT" className="mt-2" />
-                    <Button variant="outline" className="w-full mt-2 bg-transparent magnetic">
-                      Borrow
+                    <Label>Borrow Amount (USDT)</Label>
+                    <Input 
+                      placeholder="0.0" 
+                      className="mt-2" 
+                      value={borrowAmount}
+                      onChange={(e) => setBorrowAmount(e.target.value)}
+                      disabled={isProcessingTransaction}
+                    />
+                    <Button 
+                      onClick={handleBorrow}
+                      disabled={isProcessingTransaction}
+                      className="w-full mt-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700"
+                    >
+                      {isProcessingTransaction ? "Processing..." : "Borrow"}
                     </Button>
                   </div>
                   <div className="glass-card p-4">
-                    <Label>Repay Amount</Label>
-                    <Input placeholder="0.0 USDT" className="mt-2" />
-                    <Button variant="outline" className="w-full mt-2 bg-transparent magnetic">
-                      Repay
+                    <Label>Repay Amount (USDT)</Label>
+                    <Input 
+                      placeholder="0.0" 
+                      className="mt-2" 
+                      value={repayAmount}
+                      onChange={(e) => setRepayAmount(e.target.value)}
+                      disabled={isProcessingTransaction}
+                    />
+                    <Button 
+                      onClick={handleRepay}
+                      disabled={isProcessingTransaction}
+                      className="w-full mt-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700"
+                    >
+                      {isProcessingTransaction ? "Processing..." : "Repay"}
                     </Button>
                   </div>
                 </div>
-                <Button
-                  onClick={() => completeStation(2)}
-                  disabled={completedStations.includes(2)}
-                  className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 ripple magnetic"
-                >
-                  {completedStations.includes(2) ? "Completed ✓" : "Execute Lending"}
-                </Button>
+                {!isConnected && (
+                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
+                    <p className="text-sm text-yellow-800">
+                      <strong>Connect your wallet</strong> to try lending operations.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -415,28 +957,51 @@ export default function PlaygroundPage() {
                     <h4 className="font-medium mb-2">Mint NFT</h4>
                     <div className="space-y-2">
                       <Label>NFT Name</Label>
-                      <Input placeholder="My Awesome NFT" />
+                      <Input 
+                        placeholder="My Awesome NFT" 
+                        value={nftName}
+                        onChange={(e) => setNftName(e.target.value)}
+                        disabled={isProcessingTransaction}
+                      />
                       <Label>Price (BTC)</Label>
-                      <Input placeholder="0.001" />
+                      <Input 
+                        placeholder="0.001" 
+                        value={nftPrice}
+                        onChange={(e) => setNftPrice(e.target.value)}
+                        disabled={isProcessingTransaction}
+                      />
                     </div>
+                    <Button
+                      onClick={handleMintNFT}
+                      disabled={isProcessingTransaction}
+                      className="w-full mt-2 bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700"
+                    >
+                      {isProcessingTransaction ? "Processing..." : "Mint NFT"}
+                    </Button>
                   </div>
                   <div className="glass-card p-4">
                     <h4 className="font-medium mb-2">Buy NFT</h4>
                     <div className="space-y-2">
                       <Label>NFT Collection</Label>
-                      <Input placeholder="Citrea Punks" />
+                      <Input placeholder="Citrea Punks" disabled />
                       <Label>Max Price (BTC)</Label>
-                      <Input placeholder="0.01" />
+                      <Input placeholder="0.01" disabled />
                     </div>
+                    <Button 
+                      disabled
+                      className="w-full mt-2 bg-gray-400"
+                    >
+                      Coming Soon
+                    </Button>
                   </div>
                 </div>
-                <Button
-                  onClick={() => completeStation(3)}
-                  disabled={completedStations.includes(3)}
-                  className="bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 ripple magnetic"
-                >
-                  {completedStations.includes(3) ? "Completed ✓" : "Execute NFT Action"}
-                </Button>
+                {!isConnected && (
+                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
+                    <p className="text-sm text-yellow-800">
+                      <strong>Connect your wallet</strong> to try NFT operations.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -448,8 +1013,24 @@ export default function PlaygroundPage() {
                 </h3>
                 <div className="space-y-4">
                   <div className="glass-card p-4">
-                    <Label>Transaction Details</Label>
-                    <Input placeholder="Send 0.1 BTC to bc1q..." className="mt-2" />
+                    <Label>Destination Address</Label>
+                    <Input 
+                      placeholder="0x1234..." 
+                      className="mt-2" 
+                      value={multisigDestination}
+                      onChange={(e) => setMultisigDestination(e.target.value)}
+                      disabled={isProcessingTransaction}
+                    />
+                  </div>
+                  <div className="glass-card p-4">
+                    <Label>Value (ETH)</Label>
+                    <Input 
+                      placeholder="0.1" 
+                      className="mt-2" 
+                      value={multisigValue}
+                      onChange={(e) => setMultisigValue(e.target.value)}
+                      disabled={isProcessingTransaction}
+                    />
                   </div>
                   <div className="glass-card p-4">
                     <Label>Required Signatures</Label>
@@ -460,12 +1041,24 @@ export default function PlaygroundPage() {
                   </div>
                 </div>
                 <Button
-                  onClick={() => completeStation(4)}
-                  disabled={completedStations.includes(4)}
+                  onClick={handleExecuteMultisig}
+                  disabled={completedStations.includes(4) || isProcessingTransaction}
                   className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 ripple magnetic"
                 >
-                  {completedStations.includes(4) ? "Completed ✓" : "Execute Transaction"}
+                  {isProcessingTransaction 
+                    ? "Processing..." 
+                    : completedStations.includes(4) 
+                      ? "Completed ✓" 
+                      : "Simulate: Execute Transaction"
+                  }
                 </Button>
+                {!isConnected && (
+                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
+                    <p className="text-sm text-yellow-800">
+                      <strong>Connect your wallet</strong> to try multisig operations.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -480,28 +1073,57 @@ export default function PlaygroundPage() {
                     <h4 className="font-medium mb-2">Create Proposal</h4>
                     <div className="space-y-2">
                       <Label>Proposal Title</Label>
-                      <Input placeholder="Increase block rewards" />
+                      <Input 
+                        placeholder="Increase block rewards" 
+                        value={proposalTitle}
+                        onChange={(e) => setProposalTitle(e.target.value)}
+                        disabled={isProcessingTransaction}
+                      />
                       <Label>Description</Label>
-                      <Input placeholder="Proposal details..." />
+                      <Input 
+                        placeholder="Proposal details..." 
+                        value={proposalDescription}
+                        onChange={(e) => setProposalDescription(e.target.value)}
+                        disabled={isProcessingTransaction}
+                      />
                     </div>
+                    <Button
+                      onClick={handleCreateProposal}
+                      disabled={isProcessingTransaction}
+                      className="w-full mt-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
+                    >
+                      {isProcessingTransaction ? "Processing..." : "Create Proposal"}
+                    </Button>
                   </div>
                   <div className="glass-card p-4">
                     <h4 className="font-medium mb-2">Cast Vote</h4>
                     <div className="space-y-2">
-                      <Label>Active Proposal</Label>
-                      <Input placeholder="Proposal #42" disabled />
+                      <Label>Proposal ID</Label>
+                      <Input 
+                        placeholder="42" 
+                        value={proposalId}
+                        onChange={(e) => setProposalId(e.target.value)}
+                        disabled={isProcessingTransaction}
+                      />
                       <Label>Vote Weight</Label>
-                      <Input placeholder="100 tokens" />
+                      <Input placeholder="100 tokens" disabled />
                     </div>
+                    <Button
+                      onClick={handleCastVote}
+                      disabled={isProcessingTransaction}
+                      className="w-full mt-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
+                    >
+                      {isProcessingTransaction ? "Processing..." : "Cast Vote"}
+                    </Button>
                   </div>
                 </div>
-                <Button
-                  onClick={() => completeStation(5)}
-                  disabled={completedStations.includes(5)}
-                  className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 ripple magnetic"
-                >
-                  {completedStations.includes(5) ? "Completed ✓" : "Participate in Governance"}
-                </Button>
+                {!isConnected && (
+                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
+                    <p className="text-sm text-yellow-800">
+                      <strong>Connect your wallet</strong> to try governance operations.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
