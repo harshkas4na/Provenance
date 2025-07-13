@@ -1,5 +1,5 @@
-// src/eventRelay.ts - Simplified Backend: Just Watch & Relay Events
-import { ethers, Contract, JsonRpcProvider, Wallet } from 'ethers';
+// src/eventRelay.ts - Now with Manual Polling for Citrea Compatibility
+import { ethers, Contract, JsonRpcProvider, Wallet, EventLog } from 'ethers';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -38,6 +38,7 @@ export class EventRelay {
     private reputationContract: Contract;
     private targetContracts: Map<string, ContractConfig> = new Map();
     private processedEvents: Set<string> = new Set();
+    private lastCheckedBlock: number = 0;
 
     constructor() {
         // Initialize provider and wallet
@@ -76,7 +77,7 @@ export class EventRelay {
                     {
                         name: 'DomainRegistered',
                         userField: 'owner',
-                        fixedValue: 1  // Domain registration is binary action
+                        fixedValue: 1
                     },
                     {
                         name: 'DomainRenewed', 
@@ -96,12 +97,12 @@ export class EventRelay {
                     {
                         name: 'Swap',
                         userField: 'sender',
-                        valueField: 'amount0Out' // Will use max of amount0Out/amount1Out
+                        valueField: 'amount0Out'
                     },
                     {
                         name: 'Mint',
                         userField: 'sender', 
-                        valueField: 'amount0' // Will combine amount0 + amount1
+                        valueField: 'amount0'
                     }
                 ]
             });
@@ -141,7 +142,7 @@ export class EventRelay {
                     {
                         name: 'Transfer',
                         userField: 'to',
-                        valueField: 'price' // If available, otherwise fixed value
+                        valueField: 'price'
                     }
                 ]
             });
@@ -155,7 +156,7 @@ export class EventRelay {
                 events: [
                     {
                         name: 'ExecutionSuccess',
-                        userField: 'executor', // Or owner, depending on event structure
+                        userField: 'executor',
                         fixedValue: 1
                     }
                 ]
@@ -174,13 +175,13 @@ export class EventRelay {
             // Verify reputation contract connection
             const contractOwner = await this.reputationContract.owner();
             console.log('✅ Connected to ReputationSBT contract, owner:', contractOwner);
+
+            // Get the current block number to start polling from
+            this.lastCheckedBlock = await this.provider.getBlockNumber();
+            console.log(`🔍 Starting to poll for events from block ${this.lastCheckedBlock}`);
             
-            // Start listening to each target contract
-            for (const [protocolName, config] of this.targetContracts) {
-                await this.setupContractListeners(protocolName, config);
-            }
-            
-            console.log(`👁️  Now watching ${this.targetContracts.size} protocols for events`);
+            // Start the polling loop
+            this.startPolling();
             
         } catch (error) {
             console.error('❌ Failed to start event relay:', error);
@@ -188,43 +189,52 @@ export class EventRelay {
         }
     }
 
-    private async setupContractListeners(protocolName: string, config: ContractConfig): Promise<void> {
-        try {
-            const contract = new Contract(config.address, config.abi, this.provider);
-            
-            console.log(`📡 Setting up listeners for ${protocolName} at ${config.address}`);
-            
-            // Set up event listeners for each configured event
-            for (const eventConfig of config.events) {
-                console.log(`   └── Listening for ${eventConfig.name} events`);
-                
-                contract.on(eventConfig.name, (...args) => {
-                    const event = args[args.length - 1]; // Last argument is the event object
-                    this.handleEvent(protocolName, eventConfig, event);
-                });
+    private startPolling(): void {
+        setInterval(async () => {
+            try {
+                await this.pollForEvents();
+            } catch (error) {
+                console.error('Error during polling cycle:', error);
             }
-            
-        } catch (error) {
-            console.error(`❌ Failed to setup listeners for ${protocolName}:`, error);
+        }, 10000); // Poll every 10 seconds
+    }
+
+    private async pollForEvents(): Promise<void> {
+        const currentBlock = await this.provider.getBlockNumber();
+        if (currentBlock <= this.lastCheckedBlock) {
+            return; // No new blocks to check
         }
+
+        console.log(`Checking blocks from ${this.lastCheckedBlock + 1} to ${currentBlock}`);
+
+        for (const [protocolName, config] of this.targetContracts.entries()) {
+            const contract = new Contract(config.address, config.abi, this.provider);
+            for (const eventConfig of config.events) {
+                const events = await contract.queryFilter(eventConfig.name, this.lastCheckedBlock + 1, currentBlock);
+                for (const event of events) {
+                    if (event instanceof EventLog) {
+                        await this.handleEvent(protocolName, eventConfig, event);
+                    }
+                }
+            }
+        }
+
+        this.lastCheckedBlock = currentBlock;
     }
 
     private async handleEvent(
         protocolName: string,
         eventConfig: EventConfig,
-        event: any
+        event: any // Changed from EventLog to any to avoid type error
     ): Promise<void> {
         const eventId = `${event.transactionHash}-${event.logIndex}`;
         
-        // Prevent duplicate processing
         if (this.processedEvents.has(eventId)) {
-            console.log(`⚠️  Skipping duplicate event: ${eventId}`);
             return;
         }
         this.processedEvents.add(eventId);
 
         try {
-            // Extract user and value from event
             const { user, value } = this.extractEventData(protocolName, eventConfig, event);
             
             if (!user || !ethers.isAddress(user)) {
@@ -234,7 +244,6 @@ export class EventRelay {
 
             console.log(`📈 Detected: ${protocolName}.${eventConfig.name} | User: ${user} | Value: ${value}`);
 
-            // Relay to smart contract
             await this.relayToContract(
                 user,
                 protocolName,
@@ -246,7 +255,6 @@ export class EventRelay {
             
         } catch (error) {
             console.error(`❌ Error handling event ${eventId}:`, error);
-            // Remove from processed set so we can retry later
             this.processedEvents.delete(eventId);
         }
     }
@@ -258,27 +266,22 @@ export class EventRelay {
     private extractEventData(
         protocolName: string,
         eventConfig: EventConfig,
-        event: any
+        event: EventLog
     ): ExtractedData {
         const { args } = event;
         
-        // Extract user address
         const user = args[eventConfig.userField];
         if (!user) {
             throw new Error(`User field '${eventConfig.userField}' not found in event`);
         }
 
-        // Extract value
         let value: number;
         
         if (eventConfig.fixedValue !== undefined) {
-            // Use fixed value for binary actions
             value = eventConfig.fixedValue;
         } else if (eventConfig.valueField) {
-            // Extract value from specified field
             value = this.extractValueFromField(protocolName, eventConfig, args);
         } else {
-            // Default to 1 if no value specified
             value = 1;
         }
 
@@ -294,12 +297,10 @@ export class EventRelay {
             switch (protocolName) {
                 case 'dex':
                     if (eventConfig.name === 'Swap') {
-                        // For swaps, use the larger of the two output amounts
                         const amount0Out = args.amount0Out ? Number(ethers.formatEther(args.amount0Out)) : 0;
                         const amount1Out = args.amount1Out ? Number(ethers.formatEther(args.amount1Out)) : 0;
-                        return Math.floor(Math.max(amount0Out, amount1Out) * 1000); // Scale to avoid decimals
+                        return Math.floor(Math.max(amount0Out, amount1Out) * 1000);
                     } else if (eventConfig.name === 'Mint') {
-                        // For LP provision, combine both amounts
                         const amount0 = args.amount0 ? Number(ethers.formatEther(args.amount0)) : 0;
                         const amount1 = args.amount1 ? Number(ethers.formatEther(args.amount1)) : 0;
                         return Math.floor((amount0 + amount1) * 1000);
@@ -307,28 +308,25 @@ export class EventRelay {
                     break;
 
                 case 'lending':
-                    // For lending, use the amount directly
                     const amount = args[eventConfig.valueField!];
                     return amount ? Math.floor(Number(ethers.formatEther(amount)) * 1000) : 0;
 
                 case 'nft':
-                    // For NFTs, use price if available, otherwise fixed value
                     if (args.price) {
                         return Math.floor(Number(ethers.formatEther(args.price)) * 1000);
                     }
-                    return 1000; // Default NFT value
+                    return 1000;
 
                 default:
-                    // Generic extraction
                     const fieldValue = args[eventConfig.valueField!];
                     return fieldValue ? Math.floor(Number(ethers.formatEther(fieldValue)) * 1000) : 1;
             }
 
-            return 1; // Fallback value
+            return 1;
             
         } catch (error) {
             console.warn(`Failed to extract value for ${protocolName}.${eventConfig.name}:`, error);
-            return 1; // Safe fallback
+            return 1;
         }
     }
 
@@ -345,7 +343,6 @@ export class EventRelay {
         blockNumber: number
     ): Promise<void> {
         try {
-            // Estimate gas first
             const gasEstimate = await this.reputationContract.processProtocolEvent.estimateGas(
                 user,
                 protocol,
@@ -355,7 +352,6 @@ export class EventRelay {
                 blockNumber
             );
 
-            // Send transaction with 20% gas buffer
             const tx = await this.reputationContract.processProtocolEvent(
                 user,
                 protocol,
@@ -370,12 +366,10 @@ export class EventRelay {
 
             console.log(`🔗 Relayed to contract: ${tx.hash}`);
             
-            // Wait for confirmation
             const receipt = await tx.wait();
             console.log(`✅ Confirmed: ${protocol}.${eventType} for ${user} (${value} value)`);
             
         } catch (error: any) {
-            // Handle specific errors
             if (error.reason?.includes('Event already processed')) {
                 console.log(`⚠️  Event already processed: ${transactionHash}`);
                 return;
@@ -443,7 +437,6 @@ export class EventRelay {
         try {
             const totalScore = await this.reputationContract.getReputationScore(userAddress);
             
-            // Get protocol-specific scores
             const protocols = ['namoshi', 'dex', 'lending', 'nft', 'multisig', 'governance'];
             const breakdown: any = {};
             
@@ -490,7 +483,6 @@ export class ReputationAPI {
     }
 
     private setupRoutes(): void {
-        // Get user reputation
         this.app.get('/reputation/:address', async (req: Request, res: Response) => {
             try {
                 const address = req.params.address;
@@ -523,7 +515,6 @@ export class ReputationAPI {
             }
         });
 
-        // Health check
         this.app.get('/health', (req: Request, res: Response) => {
             res.json({ 
                 success: true, 
@@ -532,7 +523,6 @@ export class ReputationAPI {
             });
         });
 
-        // System stats
         this.app.get('/stats', (req: Request, res: Response) => {
             res.json({
                 success: true,
@@ -565,14 +555,11 @@ async function main() {
         const relay = new EventRelay();
         const api = new ReputationAPI(relay);
         
-        // Start event relay
         await relay.startRelay();
         
-        // Start API server
         const port = parseInt(process.env.PORT || '3001');
         api.start(port);
         
-        // Graceful shutdown
         process.on('SIGINT', async () => {
             console.log('\n🛑 Received shutdown signal...');
             await relay.stopRelay();
@@ -585,7 +572,6 @@ async function main() {
     }
 }
 
-// Run if this file is executed directly
 if (require.main === module) {
     main();
 }

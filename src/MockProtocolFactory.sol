@@ -257,9 +257,9 @@ contract MockMintParkNFT is ERC721 {
         address to,
         uint256 tokenId,
         uint256 batchSize
-    ) internal override {
+    ) internal {
         // We'll emit our custom Transfer event manually
-        super._beforeTokenTransfer(from, to, tokenId, batchSize);
+        // super._beforeTokenTransfer(from, to, tokenId, batchSize);
     }
 }
 

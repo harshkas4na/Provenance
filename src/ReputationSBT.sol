@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  * @notice Soulbound token that handles ALL scoring logic and data processing
  * @dev Backend only relays events, contract does everything else
  */
-contract ReputationSBT is ERC721, Ownable {
+contract ReputationSBT is ERC721("ReputationSBT", "RSBT"), Ownable(msg.sender) {
     
     /*//////////////////////////////////////////////////////////////
                             STRUCTS & ENUMS
@@ -92,8 +92,8 @@ contract ReputationSBT is ERC721, Ownable {
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
     
-    constructor() ERC721("Citrea Reputation Score", "CRS") {
-        _initializeDefaultRules();
+    constructor(){
+            _initializeDefaultRules();
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -337,7 +337,7 @@ contract ReputationSBT is ERC721, Ownable {
         address to,
         uint256 tokenId,
         uint256 batchSize
-    ) internal pure override {
+    ) internal {
         require(from == address(0), "Soulbound: transfer not allowed");
     }
     
